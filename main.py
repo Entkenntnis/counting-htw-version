@@ -34,12 +34,20 @@ async def on_message(message):
             if message.content.startswith("0b"):
                 new_str = message.content.replace("0b", "")
                 n = int(new_str, 2)
+            elif message.content.startswith("0x"):
+                new_str = message.content.replace("0x", "")
+                n = int(new_str, 16)
+            elif message.content.startswith("0o"):
+                new_str = message.content.replace("0o", "")
+                n = int(new_str, 8)
             else:
                 n = int(message.content)
 
             if n == current_count + 1:
                 current_count += 1
-                await message.add_reaction("✅")
+                rainbow_hearts = ["❤️", "🧡", "💛", "💚", "💙", "💜"]
+                for emoji in rainbow_hearts:
+                    await message.add_reaction(emoji)
             else:
                 current_count = 0
                 await message.add_reaction("❌")
