@@ -20,6 +20,12 @@ async def on_message(message):
             if message.content.startswith("0b"):
                 new_str = message.content.replace("0b", "")
                 n = int(new_str, 2)
+            if message.content.startswith("0x"):
+                new_str = message.content.replace("0x", "")
+                n = int(new_str, 16)
+            if message.content.startswith("0o"):
+                new_str = message.content.replace("0o", "")
+                n = int(new_str, 8)
             n = int(message.content)
 
             if n == current_count + 1:
