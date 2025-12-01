@@ -35,6 +35,9 @@ async def on_message(message):
 
         # Try to convert the message text to a number
         try:
+            if message.content.startswith("0b"):
+                new_str = message.content.replace('0b', '')
+                user_number = int(new_str, 2)
             user_number = int(message.content)
 
             # CHECK: Is the number correct? (Previous count + 1)
