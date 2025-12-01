@@ -4,11 +4,17 @@ import discord
 
 COUNTING_CHANNEL_ID = 1444772755395580087
 
+
+rainbow_hearts = ["❤️", "🧡", "💛", "💚", "💙", "💜"]
+
+
 intents = discord.Intents.default()
 intents.message_content = True
 bot = discord.Client(intents=intents)
 
+
 current_count = 0
+game_started = False  # Wird erst true wenn _anna_42_ "Start" schreibt
 
 
 @bot.event
@@ -26,10 +32,23 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    global current_count
+    global current_count, game_started
     if message.author == bot.user:
         return
     if message.channel.id == COUNTING_CHANNEL_ID:
+        # Spielstart prüfen
+        if not game_started:
+            if message.content.strip().lower() == "start":
+                game_started = True
+                await message.channel.send("Na endlich. Spiel läuft. Fangt bei 1 an.")
+                return
+            else:
+                # Reagiere nur knapp, ohne Spam von vielen Emojis
+                await message.add_reaction("⏳")
+                await message.channel.send(
+                    "Tippe 'Start' um ein neues Spiel zu beginnen."
+                )
+                return
         try:
             if message.content.startswith("0b"):
                 new_str = message.content.replace("0b", "")
@@ -45,15 +64,25 @@ async def on_message(message):
 
             if n == current_count + 1:
                 current_count += 1
-                rainbow_hearts = ["❤️", "🧡", "💛", "💚", "💙", "💜"]
+                # Reagiere mit allen Regenbogen-Herzen und zusätzlichem Regenbogen
                 for emoji in rainbow_hearts:
                     await message.add_reaction(emoji)
             else:
-                current_count = 0
-                await message.add_reaction("❌")
+                previous = current_count  # Wert vor Reset sichern
+                # NOPE als Buchstaben-Reaktionen (Regional Indicator)
+                nope = ["🇳", "🇴", "🇵", "🇪"]
+                for emoji in nope:
+                    await message.add_reaction(emoji)
                 await message.channel.send(
-                    f"{message.author.mention} messed up at {n}. Start at 1."
+                    f"{message.author.mention} Erwartet: {previous + 1}, falscher Wert geliefert ({n})."
                 )
+                await message.channel.send(
+                    "Das Spiel ist vorbei. Danke fürs Mitspielen! Nächstes Mal besser!"
+                )
+                # add big cry emoji
+                await message.channel.send("😭")
+                current_count = 0
+                game_started = False
         except ValueError:
             pass
 
