@@ -1,6 +1,7 @@
 import os
 import random
 import discord
+import datetime
 
 COUNTING_CHANNEL_ID = 1444772755395580087
 
@@ -14,7 +15,26 @@ bot = discord.Client(intents=intents)
 
 
 current_count = 0
-game_started = False  # Wird erst true wenn _anna_42_ "Start" schreibt
+game_started = False
+cooldown_until = None
+last_player_id = None
+
+
+async def end_game(message, text: str, cooldown: int):
+    global current_count, game_started, cooldown_until, last_player_id
+    for emoji in ["🇳", "🇴", "🇵", "🇪"]:
+        await message.add_reaction(emoji)
+    await message.channel.send(text)
+    await message.channel.send(
+        f"Das Spiel ist vorbei. Danke fürs Mitspielen! Nächster Versuch in {cooldown} Minuten!"
+    )
+    await message.channel.send("😭")
+    current_count = 0
+    game_started = False
+    cooldown_until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+        minutes=cooldown
+    )
+    last_player_id = None
 
 
 @bot.event
@@ -32,10 +52,24 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    global current_count, game_started
+    global current_count, game_started, cooldown_until, last_player_id
     if message.author == bot.user:
         return
     if message.channel.id == COUNTING_CHANNEL_ID:
+        # Cooldown prüfen
+        if cooldown_until is not None:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            if now < cooldown_until:
+                remaining = cooldown_until - now
+                minutes = max(1, int(remaining.total_seconds() // 60))
+                await message.add_reaction("⛔")
+                await message.channel.send(
+                    f"Cooldown aktiv. Versuch's in ~{minutes} min wieder"
+                )
+                return
+            else:
+                cooldown_until = None
+
         # Spielstart prüfen
         if not game_started:
             if message.content.strip().lower() == "start":
@@ -43,46 +77,48 @@ async def on_message(message):
                 await message.channel.send("Na endlich. Spiel läuft. Fangt bei 1 an.")
                 return
             else:
-                # Reagiere nur knapp, ohne Spam von vielen Emojis
                 await message.add_reaction("⏳")
                 await message.channel.send(
                     "Tippe 'Start' um ein neues Spiel zu beginnen."
                 )
                 return
         try:
-            if message.content.startswith("0b"):
-                new_str = message.content.replace("0b", "")
-                n = int(new_str, 2)
-            elif message.content.startswith("0x"):
-                new_str = message.content.replace("0x", "")
-                n = int(new_str, 16)
-            elif message.content.startswith("0o"):
-                new_str = message.content.replace("0o", "")
-                n = int(new_str, 8)
-            else:
-                n = int(message.content)
+            # Zahl parsen (bin/hex/oct oder dezimal)
+            try:
+                base = 10
+                s = message.content
+                if s.startswith("0b"):
+                    base, s = 2, s[2:]
+                elif s.startswith("0x"):
+                    base, s = 16, s[2:]
+                elif s.startswith("0o"):
+                    base, s = 8, s[2:]
+                n = int(s, base)
+            except Exception:
+                return
+
+            # Doppelzug prüfen: gleicher Spieler wie beim letzten korrekten Zug
+            if last_player_id is not None and message.author.id == last_player_id:
+                await end_game(
+                    message,
+                    f"{message.author.mention} Zwei Züge hintereinander? Das hier ist kein Solo.",
+                    cooldown=max(2, current_count + 1),
+                )
+                return
 
             if n == current_count + 1:
                 current_count += 1
+                last_player_id = message.author.id
                 # Reagiere mit allen Regenbogen-Herzen und zusätzlichem Regenbogen
                 for emoji in rainbow_hearts:
                     await message.add_reaction(emoji)
+                # Merke den Spieler dieses korrekten Zugs
             else:
-                previous = current_count  # Wert vor Reset sichern
-                # NOPE als Buchstaben-Reaktionen (Regional Indicator)
-                nope = ["🇳", "🇴", "🇵", "🇪"]
-                for emoji in nope:
-                    await message.add_reaction(emoji)
-                await message.channel.send(
-                    f"{message.author.mention} Erwartet: {previous + 1}, falscher Wert geliefert ({n})."
+                await end_game(
+                    message,
+                    f"{message.author.mention} Erwartet: {current_count + 1}, geliefert: {n}.",
+                    cooldown=max(2, current_count + 1),
                 )
-                await message.channel.send(
-                    "Das Spiel ist vorbei. Danke fürs Mitspielen! Nächstes Mal besser!"
-                )
-                # add big cry emoji
-                await message.channel.send("😭")
-                current_count = 0
-                game_started = False
         except ValueError:
             pass
 
