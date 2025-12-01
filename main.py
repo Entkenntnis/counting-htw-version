@@ -61,10 +61,9 @@ async def on_message(message):
             now = datetime.datetime.now(datetime.timezone.utc)
             if now < cooldown_until:
                 remaining = cooldown_until - now
-                minutes = max(1, int(remaining.total_seconds() // 60))
                 await message.add_reaction("⛔")
                 await message.channel.send(
-                    f"Cooldown aktiv. Versuch's in ~{minutes} min wieder"
+                    f"Cooldown aktiv. Versuch's in ~{round(remaining.total_seconds())}s wieder"
                 )
                 return
             else:
