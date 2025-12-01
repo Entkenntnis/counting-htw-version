@@ -17,7 +17,11 @@ async def on_message(message):
         return
     if message.channel.id == COUNTING_CHANNEL_ID:
         try:
+            if message.content.startswith("0b"):
+                new_str = message.content.replace("0b", "")
+                n = int(new_str, 2)
             n = int(message.content)
+
             if n == current_count + 1:
                 current_count += 1
                 await message.add_reaction("✅")
