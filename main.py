@@ -19,10 +19,10 @@ async def on_message(message):
         try:
             if message.content.startswith("0b"):
                 new_str = message.content.replace("0b", "")
-                user_number = int(new_str, 2)
-            user_number = int(message.content)
+                n = int(new_str, 2)
+            n = int(message.content)
 
-            if user_number == current_count + 1:
+            if n == current_count + 1:
                 current_count += 1
                 await message.add_reaction("✅")
             else:
