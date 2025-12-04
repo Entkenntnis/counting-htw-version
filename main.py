@@ -61,6 +61,9 @@ async def on_message(message):
         if cooldown_until is not None:
             now = datetime.datetime.now(datetime.timezone.utc)
             if now < cooldown_until:
+                if not message.content.strip().lower() == "start":
+                    # Don't spam
+                    return
                 remaining = cooldown_until - now
                 await message.add_reaction("⛔")
                 remaining_seconds = round(remaining.total_seconds())
