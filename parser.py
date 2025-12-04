@@ -118,21 +118,77 @@ def evaluate_expression(text: str) -> int:
     # supported unary functions (self-contained checks inside functions)
     import math
 
-    def _sqrt(x: float) -> float:
+    def _sqrt(x: float):
         if x < 0:
             raise ValueError("sqrt() not defined for negative values")
         return math.sqrt(x)
 
-    def _fac(x: float) -> float:
+    def _fac(x: float):
         xi = int(x)
         if xi < 0:
             raise ValueError("factorial() not defined for negative values")
-        return float(math.factorial(xi))
+        return math.factorial(xi)
+
+    def _abs(x: float):
+        return abs(x)
+
+    def _floor(x: float):
+        return math.floor(x)
+
+    def _ceil(x: float):
+        return math.ceil(x)
+
+    def _exp(x: float):
+        return math.exp(x)
+
+    def _sin(x: float):
+        return math.sin(x)
+
+    def _cos(x: float):
+        return math.cos(x)
+
+    def _tan(x: float):
+        return math.tan(x)
+
+    def _asin(x: float):
+        if x < -1 or x > 1:
+            raise ValueError("asin() domain is [-1, 1]")
+        return math.asin(x)
+
+    def _acos(x: float):
+        if x < -1 or x > 1:
+            raise ValueError("acos() domain is [-1, 1]")
+        return math.acos(x)
+
+    def _atan(x: float):
+        return math.atan(x)
+
+    def _log10(x: float):
+        if x <= 0:
+            raise ValueError("log() not defined for non-positive values")
+        return math.log10(x)
+
+    def _ln(x: float):
+        if x <= 0:
+            raise ValueError("ln() not defined for non-positive values")
+        return math.log(x)
 
     funcs = {
         "sqrt": _sqrt,
         "fac": _fac,
         "factorial": _fac,
+        "abs": _abs,
+        "floor": _floor,
+        "ceil": _ceil,
+        "exp": _exp,
+        "sin": _sin,
+        "cos": _cos,
+        "tan": _tan,
+        "asin": _asin,
+        "acos": _acos,
+        "atan": _atan,
+        "log": _log10,
+        "ln": _ln,
     }
     for t in output:
         if isinstance(t, float):
