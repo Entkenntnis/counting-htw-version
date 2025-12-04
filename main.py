@@ -2,6 +2,7 @@ import os
 import random
 import discord
 import datetime
+from parser import parse_message
 
 COUNTING_CHANNEL_ID = 1444772755395580087
 
@@ -74,6 +75,20 @@ async def on_message(message):
             else:
                 cooldown_until = None
 
+        # Wenn Nachricht mit calc: beginnt, dann parse und Zeige das Ergebnis
+        if message.content.strip().lower().startswith("calc:"):
+            expr = message.content.strip()[5:].strip()
+            n = parse_message(expr)
+            if n is None:
+                await message.channel.send(
+                    f"{message.author.mention} Ungültiger Ausdruck."
+                )
+            else:
+                await message.channel.send(
+                    f"{message.author.mention} Das Ergebnis ist: `{n}`"
+                )
+            return
+
         # Spielstart prüfen
         if not game_started:
             if message.content.strip().lower() == "start":
@@ -87,18 +102,9 @@ async def on_message(message):
                 )
                 return
         try:
-            # Zahl parsen (bin/hex/oct oder dezimal)
-            try:
-                base = 10
-                s = message.content
-                if s.startswith("0b"):
-                    base, s = 2, s[2:]
-                elif s.startswith("0x"):
-                    base, s = 16, s[2:]
-                elif s.startswith("0o"):
-                    base, s = 8, s[2:]
-                n = int(s, base)
-            except Exception:
+            # Zahl parsen via separatem Parser
+            n = parse_message(message.content)
+            if n is None:
                 return
 
             # Doppelzug prüfen: gleicher Spieler wie beim letzten korrekten Zug
@@ -120,7 +126,7 @@ async def on_message(message):
             else:
                 await end_game(
                     message,
-                    f"{message.author.mention} Erwartet: {current_count + 1}, geliefert: {n}.",
+                    f"{message.author.mention} Wer genau zählen kann, ist klar im Vorteil. Erwartet: {current_count + 1}, geliefert: {n}.",
                     cooldown=max(2, current_count + 1),
                 )
         except ValueError:
