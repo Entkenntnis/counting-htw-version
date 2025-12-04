@@ -42,6 +42,15 @@ def evaluate_expression(text: str) -> int:
             tokens.append(c)
             i += 1
             continue
+        # identifiers for functions (e.g., sqrt, fac, factorial)
+        if c.isalpha():
+            j = i
+            while j < len(s) and (s[j].isalpha()):
+                j += 1
+            ident = s[i:j]
+            tokens.append(ident)
+            i = j
+            continue
         j = i
         while j < len(s) and (not s[j].isspace()) and s[j] not in "+-*/()":
             j += 1
@@ -72,6 +81,16 @@ def evaluate_expression(text: str) -> int:
                 output.append(ops.pop())
             ops.append(t)
             prev = "op"
+        elif isinstance(t, str) and t not in (
+            "(",
+            ")",
+            "+",
+            "-",
+            "*",
+            "/",
+        ):  # function name
+            ops.append(t)
+            prev = "func"
         elif t == "(":
             ops.append(t)
             prev = "("
@@ -81,6 +100,13 @@ def evaluate_expression(text: str) -> int:
             if not ops:
                 raise ValueError("Mismatched parentheses")
             ops.pop()
+            # if a function is on top, pop it to output
+            if (
+                ops
+                and isinstance(ops[-1], str)
+                and ops[-1] not in ("+", "-", "*", "/", "(", ")")
+            ):
+                output.append(ops.pop())
             prev = "num"
     while ops:
         op = ops.pop()
@@ -89,24 +115,53 @@ def evaluate_expression(text: str) -> int:
         output.append(op)
 
     st = []
+    # supported unary functions (self-contained checks inside functions)
+    import math
+
+    def _sqrt(x: float) -> float:
+        if x < 0:
+            raise ValueError("sqrt() not defined for negative values")
+        return math.sqrt(x)
+
+    def _fac(x: float) -> float:
+        xi = int(x)
+        if xi < 0:
+            raise ValueError("factorial() not defined for negative values")
+        return float(math.factorial(xi))
+
+    funcs = {
+        "sqrt": _sqrt,
+        "fac": _fac,
+        "factorial": _fac,
+    }
     for t in output:
         if isinstance(t, float):
             st.append(t)
         else:
-            if len(st) < 2:
-                raise ValueError("Invalid expression")
-            b = st.pop()
-            a = st.pop()
-            if t == "+":
-                st.append(a + b)
-            elif t == "-":
-                st.append(a - b)
-            elif t == "*":
-                st.append(a * b)
-            elif t == "/":
-                if b == 0:
-                    raise ZeroDivisionError("division by zero")
-                st.append(a / b)
+            # operator or function
+            if t in ("+", "-", "*", "/"):
+                if len(st) < 2:
+                    raise ValueError("Invalid expression")
+                b = st.pop()
+                a = st.pop()
+                if t == "+":
+                    st.append(a + b)
+                elif t == "-":
+                    st.append(a - b)
+                elif t == "*":
+                    st.append(a * b)
+                elif t == "/":
+                    if b == 0:
+                        raise ZeroDivisionError("division by zero")
+                    st.append(a / b)
+            else:
+                # unary function: pop one arg
+                if len(st) < 1:
+                    raise ValueError("Invalid expression")
+                x = st.pop()
+                if t not in funcs:
+                    raise ValueError(f"Unknown function: {t}")
+                st.append(float(funcs[t](x)))
     if len(st) != 1:
         raise ValueError("Invalid expression")
     return round(st[0])
