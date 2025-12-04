@@ -19,10 +19,55 @@ current_count = 0
 game_started = False
 cooldown_until = None
 last_player_id = None
+reaction_task = None
+reaction_queue = None
+
+
+async def _worker_reactions():
+    # Single worker: processes newest jobs first, older jobs later
+    global reaction_queue
+    import asyncio
+
+    while True:
+        # Wait until there is something to do
+        while reaction_queue and len(reaction_queue) > 0:
+            message, emojis = reaction_queue.pop()  # LIFO: newest first (append/pop)
+            try:
+                for emoji in emojis:
+                    await message.add_reaction(emoji)
+            except Exception:
+                # Ignore individual failures
+                pass
+        # Sleep briefly to yield control; prevents tight loop
+        await asyncio.sleep(0.1)
+
+
+def enqueue_reactions(message, emojis):
+    """Enqueue reactions with priority: newest first, older still processed later."""
+    global reaction_task, reaction_queue
+    from collections import deque
+
+    if reaction_queue is None:
+        reaction_queue = deque()
+    reaction_queue.append((message, emojis))
+    if reaction_task is None or reaction_task.done():
+        reaction_task = bot.loop.create_task(_worker_reactions())
 
 
 async def end_game(message, text: str, cooldown: int):
-    global current_count, game_started, cooldown_until, last_player_id
+    global current_count, game_started, cooldown_until, last_player_id, reaction_queue, reaction_task
+    current_count = 0
+    game_started = False
+    cooldown_until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+        minutes=cooldown
+    )
+    last_player_id = None
+    # Empty any pending reaction jobs
+    try:
+        if reaction_queue is not None:
+            reaction_queue.clear()
+    except Exception:
+        pass
     for emoji in ["🇳", "🇴", "🇵", "🇪"]:
         await message.add_reaction(emoji)
     await message.channel.send(text)
@@ -30,12 +75,6 @@ async def end_game(message, text: str, cooldown: int):
         f"Das Spiel ist vorbei. Danke fürs Mitspielen! Nächster Versuch in {cooldown} Minuten!"
     )
     await message.channel.send("😭")
-    current_count = 0
-    game_started = False
-    cooldown_until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
-        minutes=cooldown
-    )
-    last_player_id = None
 
 
 @bot.event
@@ -57,6 +96,26 @@ async def on_message(message):
     if message.author == bot.user:
         return
     if message.channel.id == COUNTING_CHANNEL_ID:
+        # Wenn Nachricht mit calc: beginnt, dann parse und Zeige das Ergebnis
+        if message.content.strip().lower().startswith("calc:"):
+            expr = message.content.strip()[5:].strip()
+            n = parse_message(expr)
+            if n is None:
+                await message.channel.send(
+                    f"{message.author.mention} Ungültiger Ausdruck."
+                )
+            else:
+                n_rounded = round(n)
+                if n != n_rounded:
+                    await message.channel.send(
+                        f"{message.author.mention} Das Ergebnis ist: `{n}` (gerundet: `{n_rounded}`)"
+                    )
+                else:
+                    await message.channel.send(
+                        f"{message.author.mention} Das Ergebnis ist: `{round(n)}`"
+                    )
+            return
+
         # Cooldown prüfen
         if cooldown_until is not None:
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -78,26 +137,6 @@ async def on_message(message):
             else:
                 cooldown_until = None
 
-        # Wenn Nachricht mit calc: beginnt, dann parse und Zeige das Ergebnis
-        if message.content.strip().lower().startswith("calc:"):
-            expr = message.content.strip()[5:].strip()
-            n = parse_message(expr)
-            if n is None:
-                await message.channel.send(
-                    f"{message.author.mention} Ungültiger Ausdruck."
-                )
-            else:
-                n_rounded = round(n)
-                if n != n_rounded:
-                    await message.channel.send(
-                        f"{message.author.mention} Das Ergebnis ist: `{n}` (gerundet: `{n_rounded}`)"
-                    )
-                else:
-                    await message.channel.send(
-                        f"{message.author.mention} Das Ergebnis ist: `{round(n)}`"
-                    )
-            return
-
         # Spielstart prüfen
         if not game_started:
             if message.content.strip().lower() == "start":
@@ -112,9 +151,10 @@ async def on_message(message):
                 return
         try:
             # Zahl parsen via separatem Parser
-            n = round(parse_message(message.content))
+            n = parse_message(message.content)
             if n is None:
                 return
+            n = round(n)
 
             # Doppelzug prüfen: gleicher Spieler wie beim letzten korrekten Zug
             if last_player_id is not None and message.author.id == last_player_id:
@@ -128,14 +168,13 @@ async def on_message(message):
             if n == current_count + 1:
                 current_count += 1
                 last_player_id = message.author.id
-                # Reagiere mit allen Regenbogen-Herzen und zusätzlichem Regenbogen
-                for emoji in rainbow_hearts:
-                    await message.add_reaction(emoji)
+                # Enqueue reactions with priority: latest number supersedes previous
+                enqueue_reactions(message, rainbow_hearts)
                 # Merke den Spieler dieses korrekten Zugs
             else:
                 await end_game(
                     message,
-                    f"{message.author.mention} Wer genau zählen kann, ist klar im Vorteil. Erwartet: {current_count + 1}, geliefert: {n}.",
+                    f"{message.author.mention} Wer zählen kann, ist klar im Vorteil. Erwartet: {current_count + 1}, geliefert: {n}.",
                     cooldown=max(2, current_count + 1),
                 )
         except ValueError:
