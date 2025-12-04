@@ -145,6 +145,8 @@ def evaluate_expression(text: str):
         xi = int(x)
         if xi < 0:
             raise ValueError("factorial() not defined for negative values")
+        if xi > 1000:
+            raise ValueError("factorial() argument too large")
         return math.factorial(xi)
 
     def _abs(x: float):
