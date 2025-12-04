@@ -87,9 +87,15 @@ async def on_message(message):
                     f"{message.author.mention} Ungültiger Ausdruck."
                 )
             else:
-                await message.channel.send(
-                    f"{message.author.mention} Das Ergebnis ist: `{n}`"
-                )
+                n_rounded = round(n)
+                if n != n_rounded:
+                    await message.channel.send(
+                        f"{message.author.mention} Das Ergebnis ist: `{n}` (gerundet: `{n_rounded}`)"
+                    )
+                else:
+                    await message.channel.send(
+                        f"{message.author.mention} Das Ergebnis ist: `{round(n)}`"
+                    )
             return
 
         # Spielstart prüfen
@@ -106,7 +112,7 @@ async def on_message(message):
                 return
         try:
             # Zahl parsen via separatem Parser
-            n = parse_message(message.content)
+            n = round(parse_message(message.content))
             if n is None:
                 return
 

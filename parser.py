@@ -10,6 +10,9 @@ def parse_message(content: str) -> Optional[int]:
     if content is None:
         return None
     s = content.strip()
+    # remove surrounding single backticks, e.g., `1+2`
+    if len(s) >= 2 and s[0] == "`" and s[-1] == "`":
+        s = s[1:-1].strip()
     if not s:
         return None
     # First try as a plain integer literal
@@ -24,7 +27,7 @@ def parse_message(content: str) -> Optional[int]:
         return None
 
 
-def evaluate_expression(text: str) -> int:
+def evaluate_expression(text: str):
     """Evaluate expressions with +,-,*,/ and parentheses using int literals only.
     Literals follow Python's int canonical parsing (int(lit, 0)). Result is rounded to int.
     """
@@ -38,21 +41,28 @@ def evaluate_expression(text: str) -> int:
         if c.isspace():
             i += 1
             continue
-        if c in "+-*/()":
+        if c in "+-*/()^":
             tokens.append(c)
             i += 1
             continue
-        # identifiers for functions (e.g., sqrt, fac, factorial)
+        # identifiers for functions or constants (e.g., sqrt, fac, pi, e)
         if c.isalpha():
             j = i
             while j < len(s) and (s[j].isalpha()):
                 j += 1
             ident = s[i:j]
-            tokens.append(ident)
+            # constants mapping
+            if ident in ("pi", "e"):
+                import math
+
+                const_val = math.pi if ident == "pi" else math.e
+                tokens.append(const_val)
+            else:
+                tokens.append(ident)
             i = j
             continue
         j = i
-        while j < len(s) and (not s[j].isspace()) and s[j] not in "+-*/()":
+        while j < len(s) and (not s[j].isspace()) and s[j] not in "+-*/()^":
             j += 1
         lit = s[i:j]
         try:
@@ -61,12 +71,12 @@ def evaluate_expression(text: str) -> int:
             raise ValueError(f"Invalid literal: {lit}")
         i = j
 
-    prec = {"+": 1, "-": 1, "*": 2, "/": 2}
+    prec = {"+": 1, "-": 1, "*": 2, "/": 2, "^": 3}
     output = []
     ops = []
     prev = None
     for t in tokens:
-        if isinstance(t, int):
+        if isinstance(t, (int, float)):
             output.append(float(t))
             prev = "num"
         elif t in "+-":
@@ -76,8 +86,16 @@ def evaluate_expression(text: str) -> int:
                 output.append(ops.pop())
             ops.append(t)
             prev = "op"
-        elif t in "*/":
-            while ops and ops[-1] in prec and prec[ops[-1]] >= prec[t]:
+        elif t in "*/^":
+            # '^' is right-associative: only pop ops with strictly higher precedence
+            while (
+                ops
+                and ops[-1] in prec
+                and (
+                    (t != "^" and prec[ops[-1]] >= prec[t])
+                    or (t == "^" and prec[ops[-1]] > prec[t])
+                )
+            ):
                 output.append(ops.pop())
             ops.append(t)
             prev = "op"
@@ -195,7 +213,7 @@ def evaluate_expression(text: str) -> int:
             st.append(t)
         else:
             # operator or function
-            if t in ("+", "-", "*", "/"):
+            if t in ("+", "-", "*", "/", "^"):
                 if len(st) < 2:
                     raise ValueError("Invalid expression")
                 b = st.pop()
@@ -210,6 +228,8 @@ def evaluate_expression(text: str) -> int:
                     if b == 0:
                         raise ZeroDivisionError("division by zero")
                     st.append(a / b)
+                elif t == "^":
+                    st.append(a**b)
             else:
                 # unary function: pop one arg
                 if len(st) < 1:
@@ -220,7 +240,7 @@ def evaluate_expression(text: str) -> int:
                 st.append(float(funcs[t](x)))
     if len(st) != 1:
         raise ValueError("Invalid expression")
-    return round(st[0])
+    return st[0]
 
 
 if __name__ == "__main__":
