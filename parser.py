@@ -77,7 +77,7 @@ def evaluate_expression(text: str):
     prev = None
     for t in tokens:
         if isinstance(t, (int, float)):
-            output.append(float(t))
+            output.append(t)
             prev = "num"
         elif t in "+-":
             if prev in (None, "op", "("):
@@ -211,7 +211,7 @@ def evaluate_expression(text: str):
         "ln": _ln,
     }
     for t in output:
-        if isinstance(t, float):
+        if isinstance(t, float) or isinstance(t, int):
             st.append(t)
         else:
             # operator or function
@@ -231,6 +231,8 @@ def evaluate_expression(text: str):
                         raise ZeroDivisionError("division by zero")
                     st.append(a / b)
                 elif t == "^":
+                    if b > 1000:
+                        raise ValueError("Exponent too large")
                     st.append(a**b)
             else:
                 # unary function: pop one arg
@@ -239,9 +241,10 @@ def evaluate_expression(text: str):
                 x = st.pop()
                 if t not in funcs:
                     raise ValueError(f"Unknown function: {t}")
-                st.append(float(funcs[t](x)))
+                st.append(funcs[t](x))
     if len(st) != 1:
         raise ValueError("Invalid expression")
+    str(st[0])
     return st[0]
 
 
