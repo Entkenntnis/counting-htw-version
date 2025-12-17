@@ -21,6 +21,7 @@ cooldown_until = None
 last_player_id = None
 reaction_task = None
 reaction_queue = None
+last_count_message_id = None
 
 
 async def _worker_reactions():
@@ -55,13 +56,14 @@ def enqueue_reactions(message, emojis):
 
 
 async def end_game(message, text: str, cooldown: int):
-    global current_count, game_started, cooldown_until, last_player_id, reaction_queue, reaction_task
+    global current_count, game_started, cooldown_until, last_player_id, reaction_queue, reaction_task, last_count_message_id
     current_count = 0
     game_started = False
     cooldown_until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
         minutes=cooldown
     )
     last_player_id = None
+    last_count_message_id = None
     # Empty any pending reaction jobs
     try:
         if reaction_queue is not None:
@@ -92,7 +94,7 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    global current_count, game_started, cooldown_until, last_player_id
+    global current_count, game_started, cooldown_until, last_player_id, last_count_message_id
     if message.author == bot.user:
         return
     if message.channel.id == COUNTING_CHANNEL_ID:
@@ -141,6 +143,7 @@ async def on_message(message):
         if not game_started:
             if message.content.strip().lower() == "start":
                 game_started = True
+                last_count_message_id = None
                 await message.channel.send("Na endlich. Spiel läuft. Fangt bei 1 an.")
                 return
             else:
@@ -170,6 +173,8 @@ async def on_message(message):
                 last_player_id = message.author.id
                 # Enqueue reactions with priority: latest number supersedes previous
                 enqueue_reactions(message, rainbow_hearts)
+                # Store the message id of the last valid count
+                last_count_message_id = message.id
                 # Merke den Spieler dieses korrekten Zugs
             else:
                 await end_game(
@@ -179,6 +184,27 @@ async def on_message(message):
                 )
         except ValueError:
             pass
+
+
+@bot.event
+async def on_message_delete(message: discord.Message):
+    # Only care about deletions in the counting channel
+    try:
+        if not message or not message.channel:
+            return
+        if message.channel.id != COUNTING_CHANNEL_ID:
+            return
+        # We compare against the last stored valid count message id
+        global last_count_message_id, current_count
+        if last_count_message_id is not None and message.id == last_count_message_id:
+            warn = (
+                f"⚠️ Die letzte gültige Zähl-Nachricht wurde gelöscht. "
+                f"Zuletzt gezählter Wert: {current_count}."
+            )
+            await message.channel.send(warn)
+    except Exception:
+        # Never fail the bot because of debug notifications
+        pass
 
 
 bot.run(os.environ["TOKEN"])
