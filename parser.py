@@ -27,6 +27,27 @@ def parse_message(content: str) -> Optional[int]:
         return None
 
 
+def parse_roman(roman: str) -> int:
+    digits = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+
+    value = 0
+    current = 0
+
+    for c in roman:
+        v = digits.get(c.upper())
+        if v is None:
+            raise ValueError("Invalid roman numeral")
+        
+        if current == 0:
+            current = v
+        elif v > current:
+            value += v - current
+            current = 0
+        else:
+            value += current
+            current = v
+    return value + current
+
 def evaluate_expression(text: str):
     """Evaluate expressions with +,-,*,/ and parentheses using int literals only.
     Literals follow Python's int canonical parsing (int(lit, 0)). Result is rounded to int.
@@ -57,6 +78,8 @@ def evaluate_expression(text: str):
 
                 const_val = math.pi if ident == "pi" else math.e
                 tokens.append(const_val)
+            elif set(ident) <= set("IVXLCDMivxlcdm"):
+                tokens.append(parse_roman(ident))
             else:
                 tokens.append(ident)
             i = j
