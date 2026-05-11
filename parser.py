@@ -1,3 +1,4 @@
+from math import log
 from typing import Optional
 
 # CJK number characters: digits and place-value multipliers
@@ -14,7 +15,31 @@ CJK_MULTIPLIERS = (
     ("百", 100),
     ("十", 10),
 )
-
+KLINGON_DIGITS = {
+    "wa'": 1,
+    "cha'": 2,
+    "wej": 3,
+    "loS": 4,
+    "vagh": 5,
+    "jav": 6,
+    "Soch": 7,
+    "chorgh": 8,
+    "Hut": 9
+}
+KLINGON_MULTIPLIERS = {
+    "SaDSaghan": 1_000_000_000_000, "SanIDSaghan": 1_000_000_000_000,
+    "vatlhSaghan": 100_000_000_000, "bIp'uy'": 100_000_000_000,
+    "maHSaghan": 10_000_000_000, "netlh'uy'": 10_000_000_000,
+    "vatlh'uy'": 100_000_000, "SaDbIp": 100_000_000, "SanIDbIp": 100_000_000,
+    "maH'uy'": 10_000_000, "vatlhbIp": 10_000_000,
+    "Saghan": 1_000_000_000,
+    "'uy'": 1_000_000,
+    "bIp": 100_000,
+    "netlh": 10_000,
+    "SaD": 1_000, "SanID": 1_000,
+    "vatlh": 100,
+    "maH": 10,
+}
 
 def parse_cjk_number(s: str) -> Optional[int]:
     """
@@ -96,7 +121,36 @@ def _parse_cjk_inner(s: str) -> int:
 
     return result + current
 
+def parse_klingon_number(s: str) -> Optional[int]:
+    s = s.replace("‘", "'").replace("’", "'").replace("`", "'")
+    def parse_word(word: str) -> int:
+        for digit in KLINGON_DIGITS:
+            if word.startswith(digit):
+                value = KLINGON_DIGITS[digit]
+                suffix = word[len(digit):]
+                if not suffix.strip():
+                    return value
+                multiplier = KLINGON_MULTIPLIERS.get(suffix)
+                if multiplier is None:
+                    raise ValueError(f"Invalid Klingon number suffix: {suffix}")
+                return value * multiplier
+        raise ValueError(f"Invalid Klingon number: {word}")
 
+    try:        
+        words = s.split(" ")
+        value = 0
+        powers = []
+        last_value = 0
+        for word in words:
+            word_value = parse_word(word)
+            if last_value and word_value > last_value or int(log(word_value, 10)) in powers:
+                raise ValueError(f"Invalid combination of Klingon numbers: {word}")
+            value += word_value
+            last_value = word_value
+        return value
+    except ValueError:
+        return None
+        
 def parse_message(content: str) -> Optional[int]:
     """
     Parse a message as either an integer literal (canonical `int(..., 0)`)
@@ -120,6 +174,10 @@ def parse_message(content: str) -> Optional[int]:
     cjk_val = parse_cjk_number(s)
     if cjk_val is not None:
         return cjk_val
+    # Try Klingon number (e.g. wa'SaD wejvatlh wejmaH Soch)
+    klingon_val = parse_klingon_number(s)
+    if klingon_val is not None:
+        return klingon_val
     # Fallback to expression evaluation
     try:
         return evaluate_expression(s)
@@ -166,7 +224,26 @@ def evaluate_expression(text: str):
             tokens.append(c)
             i += 1
             continue
-        # identifiers for functions or constants (e.g., sqrt, fac, pi, e)
+        # check for Klingon number (multi-word token) before
+        if c in "abcDegHIjlmnopqQrStuvwy'":
+            j = i
+            klingon_words = []
+            while j < len(s):
+                while j < len(s) and s[j].isspace():
+                    j += 1
+                if j >= len(s) or s[j] not in "abcDegHIjlmnopqQrStuvwy'":
+                    break
+                word_start = j
+                while j < len(s) and s[j] not in " +-*/()^" and not s[j].isspace():
+                    j += 1
+                klingon_words.append(s[word_start:j])
+            
+            klingon_val = parse_klingon_number(" ".join(klingon_words))
+            if klingon_val is not None:
+                tokens.append(klingon_val)
+                i = j
+                continue
+        # Functions, constants, roman numerals, CJK
         if c.isalpha():
             j = i
             while j < len(s) and (s[j].isalpha()):
@@ -181,7 +258,7 @@ def evaluate_expression(text: str):
             elif set(ident) <= set("IVXLCDMivxlcdm"):
                 tokens.append(parse_roman(ident))
             elif (cjk_val := parse_cjk_number(ident)) is not None:
-                tokens.append(cjk_val)
+                tokens.append(cjk_val)   
             else:
                 tokens.append(ident)
             i = j
